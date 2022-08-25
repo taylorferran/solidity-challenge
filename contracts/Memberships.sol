@@ -11,16 +11,15 @@ contract Memberships {
     struct members 
     {
         uint creationDate;
-        uint expirationDate;
         address addr;
         string username;
         bool isActive;
     }
 
-    uint public memberCount = 1;
-    mapping (uint => members) public memberByID;
-    mapping (string => bool) public nameInUse;
-    mapping (address => bool) public membershipActiveForThisAddress;
+    uint private memberCount = 1;
+    mapping (uint => members) private memberByID;
+    mapping (string => bool) private nameInUse;
+    mapping (address => bool) private membershipActiveForThisAddress;
 
     modifier checkUsernameValidity(string memory _username) 
     {
@@ -29,6 +28,12 @@ contract Memberships {
         // Require entered username to not be empty 
         bytes memory _usernameEmptyCheck = bytes(_username);
         require(_usernameEmptyCheck.length > 0, "Username empty.");
+        _;
+    }
+
+    modifier checkMembershipActive(uint _id)
+    {
+        require(memberByID[_id].isActive, "Membership inactive.");
         _;
     }
 
@@ -50,8 +55,6 @@ contract Memberships {
             {
                  // Set creation to unix time now
                 creationDate : block.timestamp,
-                // Set expiration to unix time + 30 days
-                expirationDate : block.timestamp + 5 minutes,
                 // Set address to user creating the account
                 addr : msg.sender,
                 // Set username to desired username
@@ -68,33 +71,38 @@ contract Memberships {
     }
 
 
-    function checkMembershipValidity(uint _id) public view returns (bool) 
+    function checkMembershipValidity(uint _id) public view checkMembershipActive(_id) returns (bool) 
     {
         // If the the expiration date minus the current timestamp is less than 0, we know that the expiry time has been passed
         // Therefore we can return false to use this in requires elsewhere, if it is valid we can return true.
         //bool validity = ((memberByID[_id].expirationDate - block.timestamp < 0) ? false : true);
-
-        if((memberByID[_id].expirationDate - block.timestamp) < 0) {
-            return false;
-        } else {
-        return true;
-        } 
-        //return validity;
+        return ((block.timestamp - memberByID[_id].creationDate > 60) ? false : true);
+            
     }
 
-    function getMembership(uint _id) public view returns (members memory) 
+    function getMembership(uint _id) public view checkMembershipActive(_id) returns (members memory) 
     {
-        require(memberByID[_id].isActive, "Membership inactive.");
         // Return membership struct with all details
         return memberByID[_id];
     }
 
+    function getMemberCount() public view returns (uint) 
+    {
+        return memberCount;
+    }
+
+    function getMemberNameByID(uint _id) public view checkMembershipActive(_id) returns(string memory)
+    {
+        return memberByID[_id].username;
+    }
+
     function deleteMembership(uint _id) public checkAddressMatchesAccount(_id)
     {
+        require(memberByID[_id].isActive, "Membership already deleted.");
         memberByID[_id].isActive = false;
     }
 
-    function updateMembership(uint _id, string memory _username) public checkUsernameValidity(_username) checkAddressMatchesAccount(_id)
+    function updateMembership(uint _id, string memory _username) public checkUsernameValidity(_username) checkAddressMatchesAccount(_id) checkMembershipActive(_id)
     {
         require(checkMembershipValidity(_id), "Membership expired.");
         nameInUse[memberByID[_id].username] = false;
