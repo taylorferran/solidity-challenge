@@ -1,35 +1,39 @@
 const { expect } = require("chai");
 
 describe("Memberships contract ", function () {
-  it("Contract should increment memberCount correctly", async function () {
+  it("Contract should create multiple memberships and increment memberCount correctly", async function () {
+
+    const [addr1, addr2] = await ethers.getSigners();
 
     const Memberships = await ethers.getContractFactory("Memberships");
 
     const hardhatToken = await Memberships.deploy();
 
-    expect(await hardhatToken.getMemberCount()).to.equal(1);
+    expect(await hardhatToken.connect(addr1).getMemberCount()).to.equal(0);
 
-    await hardhatToken.createMembership("sam");
+    await hardhatToken.connect(addr1).createMembership("sam");
 
-    expect(await hardhatToken.getMemberCount()).to.equal(2);
+    expect(await hardhatToken.connect(addr1).getMemberCount()).to.equal(1);
 
-    await hardhatToken.createMembership("eric");
+    await hardhatToken.connect(addr2).createMembership("eric");
 
-    expect(await hardhatToken.getMemberCount()).to.equal(3);
+    expect(await hardhatToken.connect(addr2).getMemberCount()).to.equal(2);
   });
 
   it("Contract should return names correctly with getMemberNameByID function", async function () {
 
+    const [addr1, addr2] = await ethers.getSigners();
+
     const Memberships = await ethers.getContractFactory("Memberships");
 
     const hardhatToken = await Memberships.deploy();
 
     
-    await hardhatToken.createMembership("taylor");
+    await hardhatToken.connect(addr1).createMembership("taylor");
     
     expect(await hardhatToken.getMemberNameByID(1)).to.equal("taylor");
 
-    await hardhatToken.createMembership("ferran");
+    await hardhatToken.connect(addr2).createMembership("ferran");
 
     expect(await hardhatToken.getMemberNameByID(2)).to.equal("ferran");
   });
@@ -82,4 +86,53 @@ describe("Memberships contract ", function () {
     ).to.be.revertedWith("ID not accessible with this address.");
 
   });
+
+
+  it("Contract should not let two memberships have the same username", async function () {
+
+    const [addr1, addr2, addr3] = await ethers.getSigners();
+
+    const Memberships = await ethers.getContractFactory("Memberships");
+
+    const hardhatToken = await Memberships.deploy();
+
+    await hardhatToken.connect(addr1).createMembership("Roshan");
+
+    await hardhatToken.connect(addr2).createMembership("roshan");
+
+
+    await expect(
+      hardhatToken.connect(addr3).createMembership("Roshan")
+    ).to.be.revertedWith("Username taken.");
+
+  });
+
+  it("Contract should expire a membership after 30 days", async function() {
+
+    const[addr1] = await ethers.getSigners();
+
+    const Memberships = await ethers.getContractFactory("Memberships");
+
+    const membershipContract = await Memberships.deploy();
+
+    await membershipContract.connect(addr1).createMembership("Taylor");
+
+    expect(await membershipContract.connect(addr1).checkMembershipValidity(1)).to.equal(true);
+
+    // 15 days
+    await network.provider.send("evm_increaseTime", [1296000]);
+    await network.provider.send("evm_mine");
+
+    expect(await membershipContract.connect(addr1).checkMembershipValidity(1)).to.equal(true);
+
+
+    // 15 days
+    await network.provider.send("evm_increaseTime", [1296001]);
+    await network.provider.send("evm_mine");
+
+    expect(await membershipContract.connect(addr1).checkMembershipValidity(1)).to.equal(false);
+
+
+  });
+
 });

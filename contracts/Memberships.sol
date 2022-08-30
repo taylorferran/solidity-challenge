@@ -48,7 +48,6 @@ contract Memberships {
     {
         // Only allow one membership per address 
         require(!membershipActiveForThisAddress[msg.sender], "Address already used to activate a memebership");
-        //require(!nameInUse[_username], "Username taken.");
 
         // MemberID starts at 1 and increments for each member created
         memberByID[memberCount] = members (
@@ -67,19 +66,46 @@ contract Memberships {
         memberCount++;
         // Set name in use so that another user cannot use the same one
         nameInUse[_username] = true;
+        // Set membership active for this address
+        membershipActiveForThisAddress[msg.sender] = true;
         emit CreateUser(memberCount-1, _username);
     }
 
+    function updateMembership(uint _id, string memory _username) public checkUsernameValidity(_username) checkAddressMatchesAccount(_id) checkMembershipActive(_id)
+    {
+        require(checkMembershipValidity(_id), "Membership expired.");
+        // Remove old username from the pool of taken usernames
+        nameInUse[memberByID[_id].username] = false;
+        // Set membership username to new username
+        memberByID[_id].username = _username;
+        // Add new username to the pool of taken usernames
+        nameInUse[_username] = true;
+        emit UpdateUser(_id, _username);
+    }
+
+
+    // We cannot delete entries from hashmaps in solidity so here we're
+    // just setting it to inactive, making it unusable in other functions.
+    // I think in general this will be more scalable than an array based approach
+    function deleteMembership(uint _id) public checkAddressMatchesAccount(_id)
+    {
+        require(memberByID[_id].isActive, "Membership already deleted.");
+        memberByID[_id].isActive = false;
+    }
+
+
+    ///      ///
+    //  UTILS //
+    ///     /// 
 
     function checkMembershipValidity(uint _id) public view checkMembershipActive(_id) returns (bool) 
     {
-        // If the the expiration date minus the current timestamp is less than 0, we know that the expiry time has been passed
+        // If the the current time minus the creation date is over 30 days in seconds, we know that the expiry time has been passed
         // Therefore we can return false to use this in requires elsewhere, if it is valid we can return true.
-        //bool validity = ((memberByID[_id].expirationDate - block.timestamp < 0) ? false : true);
-        return ((block.timestamp - memberByID[_id].creationDate > 60) ? false : true);
-            
+        return ((block.timestamp - memberByID[_id].creationDate >  2592000) ? false : true);
     }
 
+    // Maybe can delete this function
     function getMembership(uint _id) public view checkMembershipActive(_id) returns (members memory) 
     {
         // Return membership struct with all details
@@ -88,7 +114,7 @@ contract Memberships {
 
     function getMemberCount() public view returns (uint) 
     {
-        return memberCount;
+        return memberCount-1;
     }
 
     function getMemberNameByID(uint _id) public view checkMembershipActive(_id) returns(string memory)
@@ -96,18 +122,5 @@ contract Memberships {
         return memberByID[_id].username;
     }
 
-    function deleteMembership(uint _id) public checkAddressMatchesAccount(_id)
-    {
-        require(memberByID[_id].isActive, "Membership already deleted.");
-        memberByID[_id].isActive = false;
-    }
 
-    function updateMembership(uint _id, string memory _username) public checkUsernameValidity(_username) checkAddressMatchesAccount(_id) checkMembershipActive(_id)
-    {
-        require(checkMembershipValidity(_id), "Membership expired.");
-        nameInUse[memberByID[_id].username] = false;
-        memberByID[_id].username = _username;
-        nameInUse[_username] = true;
-        emit UpdateUser(_id, _username);
-    }
 }
