@@ -16,6 +16,8 @@ contract Memberships {
         bool isActive;
     }
 
+    // TODO: Currently we use this to keep count of member count and asign member ID,
+    // this means this count is currently inaccurate when memberships are deleted or expire
     uint private memberCount = 1;
     mapping (uint => members) private memberByID;
     mapping (string => bool) private nameInUse;
@@ -33,6 +35,7 @@ contract Memberships {
 
     modifier checkMembershipActive(uint _id)
     {
+        // This is set to inactive to "delete" a membership
         require(memberByID[_id].isActive, "Membership inactive.");
         _;
     }
@@ -44,9 +47,10 @@ contract Memberships {
         _;
     }
 
+    // Let a user create a membership with username that isn't taken 
+    // Only allow one membership per address 
     function createMembership(string memory _username) public checkUsernameValidity(_username)
     {
-        // Only allow one membership per address 
         require(!membershipActiveForThisAddress[msg.sender], "Address already used to activate a memebership");
 
         // MemberID starts at 1 and increments for each member created
